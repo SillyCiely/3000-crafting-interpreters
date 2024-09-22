@@ -17,7 +17,8 @@ enum TokenType {
     BANG, BANG_EQUAL, EQUAL, EQUAL_EQUAL, GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL, IDENTIFIER, STRING, NUMBER,
     AND, CLASS, ELSE, FALSE, FUN, FOR, IF, NIL, OR,
-    PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE, EOF
+    PRINT, RETURN, SUPER, THIS, TRUE, VAR, WHILE, EOF,
+    READ, RAND // added read/rand --> new tokens/expressions for
 }
 
 class Token {
@@ -63,6 +64,9 @@ class Scanner {
         keywords.put("true", TokenType.TRUE);
         keywords.put("var", TokenType.VAR);
         keywords.put("while", TokenType.WHILE);
+        // added read/rand
+        keywords.put("read", TokenType.READ);
+        keywords.put("rand", TokenType.RAND);
     }
 
     Scanner(String source) {
@@ -95,11 +99,19 @@ class Scanner {
             case '}': addToken(TokenType.RIGHT_BRACE); break;
             case ',': addToken(TokenType.COMMA); break;
             case '.': addToken(TokenType.DOT); break;
-            case '-': addToken(TokenType.MINUS); break;
+            case '-': addToken(match('>') ? TokenType.READ : TokenType.MINUS); break; // added READ
             case '+': addToken(TokenType.PLUS); break;
             case ';': addToken(TokenType.SEMICOLON); break;
             case '*': addToken(TokenType.STAR); break;
-            case '!': addToken(match('=') ? TokenType.BANG_EQUAL : TokenType.BANG); break;
+            case '!':
+                if (match('=')) {
+                    addToken(TokenType.BANG_EQUAL);
+                } else if (match('!')) {
+                    addToken(TokenType.RAND); // added RAND
+                } else {
+                    addToken(TokenType.BANG);
+                }
+                break;
             case '=': addToken(match('=') ? TokenType.EQUAL_EQUAL : TokenType.EQUAL); break;
             case '<': addToken(match('=') ? TokenType.LESS_EQUAL : TokenType.LESS); break;
             case '>': addToken(match('=') ? TokenType.GREATER_EQUAL : TokenType.GREATER); break;
@@ -168,6 +180,7 @@ class Scanner {
         while (isAlphaNumeric(peek())) advance();
         String text = source.substring(start, current);
         TokenType type = keywords.get(text);
+
         if (type == null) type = TokenType.IDENTIFIER;
         addToken(type);
     }
@@ -189,6 +202,8 @@ abstract class Expr {
         R visitUnaryExpr(Unary expr);
         R visitLiteralExpr(Literal expr);
         R visitGroupingExpr(Grouping expr);
+        R visitReadExpr(Read expr);
+        R visitRandExpr(Rand expr);
     }
 
     abstract <R> R accept(Visitor<R> visitor);
@@ -250,6 +265,21 @@ abstract class Expr {
             return visitor.visitGroupingExpr(this);
         }
     }
+
+    static class Read extends Expr {
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitReadExpr(this);
+        }
+    }
+
+    static class Rand extends Expr {
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitRandExpr(this);
+        }
+    }
+
 }
 
 // Parses the expressions into the abstract syntax tree
@@ -342,6 +372,14 @@ class Parser {
             return new Expr.Grouping(expr);
         }
 
+        if (match(TokenType.READ)) {
+            return new Expr.Read();
+        }
+
+        if (match(TokenType.RAND)) {
+            return new Expr.Rand();
+        }
+
         throw error(peek(), "Expect expression.");
     }
 
@@ -429,6 +467,16 @@ class AstPrinter implements Expr.Visitor<String> {
     @Override
     public String visitGroupingExpr(Expr.Grouping expr) {
         return parenthesize("group", expr.expression);
+    }
+
+    @Override
+    public String visitReadExpr(Expr.Read expr) {
+        return "read";
+    }
+
+    @Override
+    public String visitRandExpr(Expr.Rand expr) {
+        return "rand";
     }
 
     @Override
