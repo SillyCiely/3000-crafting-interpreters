@@ -252,7 +252,7 @@ abstract class Expr {
     }
 }
 
-// parses the expressions into the abstract syntax tree
+// Parses the expressions into the abstract syntax tree
 class Parser {
     private final List<Token> tokens;
     private int current = 0;
@@ -382,7 +382,32 @@ class Parser {
             advance();
             return;
         }
-        throw error(peek(), message);
+
+        // Error recovery
+        Lox.error(peek().line, message);
+        synchronize();
+    }
+
+    private void synchronize() {
+        advance();
+
+        while (!isAtEnd()) {
+            if (previous().type == TokenType.SEMICOLON) return;
+
+            switch (peek().type) {
+                case CLASS:
+                case FUN:
+                case VAR:
+                case FOR:
+                case IF:
+                case WHILE:
+                case PRINT:
+                case RETURN:
+                    return;
+            }
+
+            advance();
+        }
     }
 
     private RuntimeException error(Token token, String message) {
@@ -469,7 +494,6 @@ class Lox {
         Expr expression = parser.parse();
 
         AstPrinter printer = new AstPrinter();
-//        System.out.println(expression);
         System.out.println(printer.print(expression));
     }
 
