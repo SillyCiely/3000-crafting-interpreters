@@ -184,6 +184,15 @@ class Scanner {
 // EXPR --> Abstract Syntax Tree (AST)
 // contains types of expressions (Binary, Unary, Literal, Grouping).
 abstract class Expr {
+    interface Visitor<R> {
+        R visitBinaryExpr(Binary expr);
+        R visitUnaryExpr(Unary expr);
+        R visitLiteralExpr(Literal expr);
+        R visitGroupingExpr(Grouping expr);
+    }
+
+    abstract <R> R accept(Visitor<R> visitor);
+
     static class Binary extends Expr {
         final Expr left;
         final Token operator;
@@ -193,6 +202,11 @@ abstract class Expr {
             this.left = left;
             this.operator = operator;
             this.right = right;
+        }
+
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitBinaryExpr(this);
         }
     }
 
@@ -204,6 +218,11 @@ abstract class Expr {
             this.operator = operator;
             this.right = right;
         }
+
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitUnaryExpr(this);
+        }
     }
 
     static class Literal extends Expr {
@@ -212,6 +231,11 @@ abstract class Expr {
         Literal(Object value) {
             this.value = value;
         }
+
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitLiteralExpr(this);
+        }
     }
 
     static class Grouping extends Expr {
@@ -219,6 +243,11 @@ abstract class Expr {
 
         Grouping(Expr expression) {
             this.expression = expression;
+        }
+
+        @Override
+        <R> R accept(Visitor<R> visitor) {
+            return visitor.visitGroupingExpr(this);
         }
     }
 }
@@ -361,6 +390,44 @@ class Parser {
     }
 }
 
+class AstPrinter implements Expr.Visitor<String> {
+    String print(Expr expr) {
+        return expr.accept(this);
+    }
+
+    @Override
+    public String visitBinaryExpr(Expr.Binary expr) {
+        return parenthesize(expr.operator.lexeme, expr.left, expr.right);
+    }
+
+    @Override
+    public String visitGroupingExpr(Expr.Grouping expr) {
+        return parenthesize("group", expr.expression);
+    }
+
+    @Override
+    public String visitLiteralExpr(Expr.Literal expr) {
+        if (expr.value == null) return "nil";
+        return expr.value.toString();
+    }
+
+    @Override
+    public String visitUnaryExpr(Expr.Unary expr) {
+        return parenthesize(expr.operator.lexeme, expr.right);
+    }
+
+    private String parenthesize(String name, Expr... exprs) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("(").append(name);
+        for (Expr expr : exprs) {
+            builder.append(" ");
+            builder.append(expr.accept(this));
+        }
+        builder.append(")");
+        return builder.toString();
+    }
+}
+
 class Lox {
     static boolean hadError = false;
 
@@ -400,7 +467,9 @@ class Lox {
         Parser parser = new Parser(tokens);
         Expr expression = parser.parse();
 
-        System.out.println(expression);
+        AstPrinter printer = new AstPrinter();
+//        System.out.println(expression);
+        System.out.println(printer.print(expression));
     }
 
     static void error(int line, String message) {
