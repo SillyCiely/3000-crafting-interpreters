@@ -181,6 +181,186 @@ class Scanner {
     }
 }
 
+// EXPR --> Abstract Syntax Tree (AST)
+// contains types of expressions (Binary, Unary, Literal, Grouping).
+abstract class Expr {
+    static class Binary extends Expr {
+        final Expr left;
+        final Token operator;
+        final Expr right;
+
+        Binary(Expr left, Token operator, Expr right) {
+            this.left = left;
+            this.operator = operator;
+            this.right = right;
+        }
+    }
+
+    static class Unary extends Expr {
+        final Token operator;
+        final Expr right;
+
+        Unary(Token operator, Expr right) {
+            this.operator = operator;
+            this.right = right;
+        }
+    }
+
+    static class Literal extends Expr {
+        final Object value;
+
+        Literal(Object value) {
+            this.value = value;
+        }
+    }
+
+    static class Grouping extends Expr {
+        final Expr expression;
+
+        Grouping(Expr expression) {
+            this.expression = expression;
+        }
+    }
+}
+
+// parses the expressions into the abstract syntax tree
+class Parser {
+    private final List<Token> tokens;
+    private int current = 0;
+
+    Parser(List<Token> tokens) {
+        this.tokens = tokens;
+    }
+
+    Expr parse() {
+        return expression();
+    }
+
+    private Expr expression() {
+        return equality();
+    }
+
+    private Expr equality() {
+        Expr expr = comparison();
+
+        while (match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL)) {
+            Token operator = previous();
+            Expr right = comparison();
+            expr = new Expr.Binary(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr comparison() {
+        Expr expr = term();
+
+        while (match(TokenType.GREATER, TokenType.GREATER_EQUAL,
+                TokenType.LESS, TokenType.LESS_EQUAL)) {
+            Token operator = previous();
+            Expr right = term();
+            expr = new Expr.Binary(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr term() {
+        Expr expr = factor();
+
+        while (match(TokenType.MINUS, TokenType.PLUS)) {
+            Token operator = previous();
+            Expr right = factor();
+            expr = new Expr.Binary(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr factor() {
+        Expr expr = unary();
+
+        while (match(TokenType.SLASH, TokenType.STAR)) {
+            Token operator = previous();
+            Expr right = unary();
+            expr = new Expr.Binary(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private Expr unary() {
+        if (match(TokenType.BANG, TokenType.MINUS)) {
+            Token operator = previous();
+            Expr right = unary();
+            return new Expr.Unary(operator, right);
+        }
+
+        return primary();
+    }
+
+    private Expr primary() {
+        if (match(TokenType.NUMBER)) {
+            return new Expr.Literal(previous().literal);
+        }
+        if (match(TokenType.STRING)) {
+            return new Expr.Literal(previous().literal);
+        }
+        if (match(TokenType.LEFT_PAREN)) {
+            Expr expr = expression();
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
+            return new Expr.Grouping(expr);
+        }
+
+        throw error(peek(), "Expect expression.");
+    }
+
+    private boolean match(TokenType... types) {
+        for (TokenType type : types) {
+            if (check(type)) {
+                advance();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean check(TokenType type) {
+        if (isAtEnd()) return false;
+        return peek().type == type;
+    }
+
+    private Token advance() {
+        if (!isAtEnd()) current++;
+        return previous();
+    }
+
+    private Token previous() {
+        return tokens.get(current - 1);
+    }
+
+    private Token peek() {
+        return tokens.get(current);
+    }
+
+    private boolean isAtEnd() {
+        return current >= tokens.size();
+    }
+
+    private void consume(TokenType type, String message) {
+        if (check(type)) {
+            advance();
+            return;
+        }
+        throw error(peek(), message);
+    }
+
+    private RuntimeException error(Token token, String message) {
+        Lox.error(token.line, message);
+        return new RuntimeException("Parsing error");
+    }
+}
+
 class Lox {
     static boolean hadError = false;
 
@@ -216,9 +396,11 @@ class Lox {
     private static void run(String source) {
         Scanner scanner = new Scanner(source);
         List<Token> tokens = scanner.scanTokens();
-        for (Token token : tokens) {
-            System.out.println(token);
-        }
+
+        Parser parser = new Parser(tokens);
+        Expr expression = parser.parse();
+
+        System.out.println(expression);
     }
 
     static void error(int line, String message) {
