@@ -284,8 +284,7 @@ class Parser {
     private Expr comparison() {
         Expr expr = term();
 
-        while (match(TokenType.GREATER, TokenType.GREATER_EQUAL,
-                TokenType.LESS, TokenType.LESS_EQUAL)) {
+        while (match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL)) {
             Token operator = previous();
             Expr right = term();
             expr = new Expr.Binary(expr, operator, right);
@@ -329,12 +328,14 @@ class Parser {
     }
 
     private Expr primary() {
-        if (match(TokenType.NUMBER)) {
+        if (match(TokenType.FALSE)) return new Expr.Literal(false);
+        if (match(TokenType.TRUE)) return new Expr.Literal(true);
+        if (match(TokenType.NIL)) return new Expr.Literal(null);
+
+        if (match(TokenType.NUMBER, TokenType.STRING)) {
             return new Expr.Literal(previous().literal);
         }
-        if (match(TokenType.STRING)) {
-            return new Expr.Literal(previous().literal);
-        }
+
         if (match(TokenType.LEFT_PAREN)) {
             Expr expr = expression();
             consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
@@ -364,16 +365,16 @@ class Parser {
         return previous();
     }
 
-    private Token previous() {
-        return tokens.get(current - 1);
+    private boolean isAtEnd() {
+        return peek().type == TokenType.EOF;
     }
 
     private Token peek() {
         return tokens.get(current);
     }
 
-    private boolean isAtEnd() {
-        return current >= tokens.size();
+    private Token previous() {
+        return tokens.get(current - 1);
     }
 
     private void consume(TokenType type, String message) {
